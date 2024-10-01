@@ -595,7 +595,7 @@ void thread_sleep(int64_t wakeup_time) {
   curr->alarm_time = wakeup_time; //alarm_time 저장
   list_push_back (&block_list, &curr->elem); //block_list에 저장
   thread_block(); //block
-  
+
   intr_set_level(old_level); //interrupt 활성화
 }
 
