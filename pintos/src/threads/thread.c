@@ -585,15 +585,20 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
 void thread_sleep(int64_t wakeup_time) {
   struct thread *curr = thread_current();
   if (curr == idle_thread) return; //idle이면 block_list에 넣지 않음
+
   enum intr_level old_level = intr_disable(); //thread 가져옴
+
   curr->alarm_time = wakeup_time; //alarm_time 저장
   list_push_back (&block_list, &curr->allelem); //block_list에 저장
   thread_block(); //block
+  
   intr_set_level(old_level); //interrupt 활성화
 }
+
 void thread_awake(int64_t curr_time){
   enum intr_level old_level = intr_disable();
 

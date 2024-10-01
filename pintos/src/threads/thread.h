@@ -138,4 +138,7 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+void thread_sleep(int64_t wake_time);
+void thread_awake(int64_t curr_time);
+
 #endif /* threads/thread.h */
