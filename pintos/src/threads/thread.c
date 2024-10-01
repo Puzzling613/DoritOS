@@ -593,7 +593,7 @@ void thread_sleep(int64_t wakeup_time) {
   enum intr_level old_level = intr_disable(); //thread 가져옴
 
   curr->alarm_time = wakeup_time; //alarm_time 저장
-  list_push_back (&block_list, &curr->allelem); //block_list에 저장
+  list_push_back (&block_list, &curr->elem); //block_list에 저장
   thread_block(); //block
   
   intr_set_level(old_level); //interrupt 활성화
@@ -612,7 +612,7 @@ void thread_awake(int64_t curr_time){
       e = list_remove(e);
       thread_unblock(t);
     }
-    else break;
+    else e = list_next(e);
   }
   intr_set_level(old_level);
 }
