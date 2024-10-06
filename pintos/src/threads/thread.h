@@ -141,4 +141,6 @@ int thread_get_load_avg (void);
 void thread_sleep(int64_t wake_time);
 void thread_awake(int64_t curr_time);
 
+void thread_yield_after_compare(void);
+
 #endif /* threads/thread.h */
