@@ -205,7 +205,7 @@ thread_create (const char *name, int priority,
   thread_unblock (t);
 
   /* Compare the priority of running thread and ready list's supreme thread */
-  if (!list_empty (&ready_list) && thread_current()->priority < list_entry(ready_list[0], struct thread, elem)->priority) {
+  if (!list_empty (&ready_list) && thread_current()->priority < list_entry(list_begin(&ready_list), struct thread, elem)->priority) {
     thread_yield(); 
   }
   return tid;
@@ -238,9 +238,6 @@ thread_block (void)
 void
 thread_unblock (struct thread *t) 
 {
-  if (!list_empty (&ready_list) && thread_current()->priority < list_entry(ready_list[0], struct thread, elem)->priority) {
-    thread_yield(); 
-  }
   enum intr_level old_level;
 
   ASSERT (is_thread (t));
@@ -347,7 +344,7 @@ thread_set_priority (int new_priority)
 {
   thread_current ()->priority = new_priority;
   /* Compare the priority of running thread and ready list's supreme thread */
-  if (!list_empty (&ready_list) && thread_current()->priority < list_entry(ready_list[0], struct thread, elem)->priority) {
+  if (!list_empty (&ready_list) && thread_current()->priority < list_entry(list_begin(&ready_list), struct thread, elem)->priority) {
     thread_yield(); 
   }
 }
