@@ -204,6 +204,10 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  /* Compare the priority of running thread and ready list's supreme thread */
+  if (!list_empty (&ready_list) && thread_current()->priority < list_entry(ready_list[0], struct thread, elem)->priority) {
+    thread_yield(); 
+  }
   return tid;
 }
 
@@ -234,6 +238,9 @@ thread_block (void)
 void
 thread_unblock (struct thread *t) 
 {
+  if (!list_empty (&ready_list) && thread_current()->priority < list_entry(ready_list[0], struct thread, elem)->priority) {
+    thread_yield(); 
+  }
   enum intr_level old_level;
 
   ASSERT (is_thread (t));
@@ -339,6 +346,10 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  /* Compare the priority of running thread and ready list's supreme thread */
+  if (!list_empty (&ready_list) && thread_current()->priority < list_entry(ready_list[0], struct thread, elem)->priority) {
+    thread_yield(); 
+  }
 }
 
 /* Returns the current thread's priority. */
