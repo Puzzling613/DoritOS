@@ -458,12 +458,6 @@ list_insert_ordered (struct list *list, struct list_elem *elem,
   return list_insert (e, elem);
 }
 
-bool list_compare (struct list_elem *a, struct list_elem *b, void *aux){
-  if (list_entry(a, struct thread, elem)->priority) aux = true;
-  else aux = false;
-  return aux;
-}
-
 /* Iterates through LIST and removes all but the first in each
    set of adjacent elements that are equal according to LESS
    given auxiliary data AUX.  If DUPLICATES is non-null, then the
