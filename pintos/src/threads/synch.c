@@ -39,13 +39,13 @@ struct semaphore_elem
     struct semaphore semaphore;         /* This semaphore. */
   };
 
-// bool
-// sema_compare(struct list_elem *a, struct list_elem *b, void *aux UNUSED){
-//   struct list *sema_a = &(list_entry(a, struct semaphore_elem, elem)->semaphore.waiters);
-//   struct list *sema_b = &(list_entry(b, struct semaphore_elem, elem)->semaphore.waiters);
+bool
+sema_compare(struct list_elem *a, struct list_elem *b, void *aux UNUSED){
+  struct list *sema_a = &(list_entry(a, struct semaphore_elem, elem)->semaphore.waiters);
+  struct list *sema_b = &(list_entry(b, struct semaphore_elem, elem)->semaphore.waiters);
 
-//   return list_entry(list_begin(sema_a), struct thread, elem)->priority > list_entry(list_begin(sema_b), struct thread, elem)->priority;
-// }
+  return list_entry(list_begin(sema_a), struct thread, elem)->priority > list_entry(list_begin(sema_b), struct thread, elem)->priority;
+}
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -129,7 +129,7 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)) 
-    list_sort(&sema->waiters, sema_compare, 0);
+    list_sort(&sema->waiters, list_compare, 0);
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
   sema->value++;
