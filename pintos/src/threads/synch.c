@@ -267,14 +267,10 @@ cond_init (struct condition *cond)
 
 bool
 sema_compare(struct list_elem *a, struct list_elem *b, bool *aux){
-  sema_a = list_entry(a, struct semaphore_elem, elem);
-  sema_b = list_entry(b, struct semaphore_elem, elem);
+  struct list *sema_a = &(list_entry(a, struct semaphore_elem, elem)->semaphore.waiters);
+  struct list *sema_b = &(list_entry(b, struct semaphore_elem, elem)->semaphore.waiters);
 
-  priority_a = thread_get_priority(list_entry(a, struct semaphore_elem, elem)->thread);
-  priority_b = thread_get_priority(list_entry(b, struct semaphore_elem, elem)->thread);
-
-  aux = priority_a > priority_b;
-  
+  aux = list_entry(list_begin(sema_a), struct thread, elem)->priority > list_entry(list_begin(sema_b), struct thread, elem)->priority;
   return aux;
 }
 
@@ -331,7 +327,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (lock_held_by_current_thread (lock));
 
   if (!list_empty (&cond->waiters))
-    list_sort(&sema->waiters,sema_compare,0); 
+    list_sort(&cond->waiters,sema_compare,0); 
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
 }
