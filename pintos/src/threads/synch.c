@@ -39,14 +39,6 @@ struct semaphore_elem
     struct semaphore semaphore;         /* This semaphore. */
   };
 
-bool
-sema_compare(struct list_elem *a, struct list_elem *b, void *aux UNUSED){
-  struct list *sema_a = &(list_entry(a, struct semaphore_elem, elem)->semaphore.waiters);
-  struct list *sema_b = &(list_entry(b, struct semaphore_elem, elem)->semaphore.waiters);
-
-  return list_entry(list_begin(sema_a), struct thread, elem)->priority > list_entry(list_begin(sema_b), struct thread, elem)->priority;
-}
-
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -128,10 +120,11 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
+  if (!list_empty (&sema->waiters)){ 
     list_sort(&sema->waiters, list_compare, 0);
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
+  }
   sema->value++;
   thread_yield_after_compare();
   intr_set_level (old_level);
@@ -263,7 +256,13 @@ lock_held_by_current_thread (const struct lock *lock)
   return lock->holder == thread_current ();
 }
 
+bool
+sema_compare (struct list_elem *a, struct list_elem *b, void *aux UNUSED){
+  struct list *sema_a = &(list_entry(a, struct semaphore_elem, elem)->semaphore.waiters);
+  struct list *sema_b = &(list_entry(b, struct semaphore_elem, elem)->semaphore.waiters);
 
+  return list_entry(list_begin(sema_a), struct thread, elem)->priority > list_entry(list_begin(sema_b), struct thread, elem)->priority;
+}
 
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
@@ -328,10 +327,11 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters))
+  if (!list_empty (&cond->waiters)){
     list_sort(&cond->waiters,sema_compare,0); 
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
+  }
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
