@@ -143,4 +143,6 @@ void thread_awake(int64_t curr_time);
 
 void thread_yield_after_compare(void);
 
+bool list_compare (struct list_elem *, struct list_elem *, bool *);
+
 #endif /* threads/thread.h */
