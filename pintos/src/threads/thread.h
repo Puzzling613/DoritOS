@@ -93,6 +93,11 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+    int real_priority;
+    struct lock* waiting_lock;
+    struct list donation_list;
+    struct list_elem donation_elem;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -144,5 +149,6 @@ void thread_awake(int64_t curr_time);
 void thread_yield_after_compare(void);
 
 bool list_compare (struct list_elem *, struct list_elem *, bool *);
+
 
 #endif /* threads/thread.h */
