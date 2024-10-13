@@ -98,6 +98,9 @@ struct thread
     struct list donation_list;
     struct list_elem donation_elem;
 
+    int nice;
+    int recent_cpu;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */

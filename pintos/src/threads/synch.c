@@ -209,7 +209,9 @@ lock_acquire (struct lock *lock)
   if(lock->holder) { //lock을 들고 있는 스레드가 있다면 priority donation 필요
     thread_current()->waiting_lock = lock; //러닝 스레드가 기다리고 있는 락을 지금 락으로 설정
     list_insert_ordered (&lock->holder->donation_list, &thread_current ()->donation_elem, donation_compare, 0); //도네이션 리스트에 양도하는 러닝 스레드 넣기
-    donate_priority();
+    if (!thread_mlfqs){
+      donate_priority();
+    }
   }
   sema_down (&lock->semaphore);
   thread_current ()->waiting_lock = NULL;
@@ -247,8 +249,10 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-  remove_donation (lock);
-  refresh_priority ();
+  if (!thread_mlfqs){
+    remove_donation (lock);
+    refresh_priority ();
+  }
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);
