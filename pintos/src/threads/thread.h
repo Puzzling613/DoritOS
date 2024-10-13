@@ -153,5 +153,12 @@ void thread_yield_after_compare(void);
 
 bool list_compare (struct list_elem *, struct list_elem *, bool *);
 
+void calc_mlfqs_priority(struct thread *);
+void calc_mlfqs_recent_cpu(struct thread *);
+void calc_mlfqs_load_avg(void);
+void recalc_mlfqs_priority(void);
+void recalc_mlfqs_recent_cpu(void);
+void increment_recent_cpu(void);
+
 
 #endif /* threads/thread.h */
