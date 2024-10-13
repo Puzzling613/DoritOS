@@ -89,9 +89,17 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-
+    int64_t alarm_time;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+
+    int real_priority;
+    struct lock* waiting_lock;
+    struct list donation_list;
+    struct list_elem donation_elem;
+
+    int nice;
+    int recent_cpu;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -137,5 +145,20 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+void thread_sleep(int64_t wake_time);
+void thread_awake(int64_t curr_time);
+
+void thread_yield_after_compare(void);
+
+bool list_compare (struct list_elem *, struct list_elem *, bool *);
+
+void calc_mlfqs_priority(struct thread *);
+void calc_mlfqs_recent_cpu(struct thread *);
+void calc_mlfqs_load_avg(void);
+void recalc_mlfqs_priority(void);
+void recalc_mlfqs_recent_cpu(void);
+void increment_recent_cpu(void);
+
 
 #endif /* threads/thread.h */
