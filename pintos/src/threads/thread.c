@@ -229,9 +229,8 @@ thread_block (void)
   schedule ();
 }
 
-bool list_compare (struct list_elem *a, struct list_elem *b, bool *aux){
-  aux = list_entry(a, struct thread, elem)->priority >  list_entry(b, struct thread, elem)->priority;
-  return aux;
+bool list_compare (struct list_elem *a, struct list_elem *b, bool *aux UNUSED){
+  return list_entry(a, struct thread, elem)->priority >  list_entry(b, struct thread, elem)->priority;
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
