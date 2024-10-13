@@ -206,7 +206,15 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  if(lock->holder) { //lock을 들고 있는 스레드가 있다면 priority donation 필요
+    thread_current()->waiting_lock = lock; //러닝 스레드가 기다리고 있는 락을 지금 락으로 설정
+    list_insert_ordered (&lock->holder->donation_list, &thread_current ()->donation_elem, donation_compare, 0); //도네이션 리스트에 양도하는 러닝 스레드 넣기
+    if (!thread_mlfqs){
+      donate_priority();
+    }
+  }
   sema_down (&lock->semaphore);
+  thread_current ()->waiting_lock = NULL;
   lock->holder = thread_current ();
 }
 
@@ -240,6 +248,11 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
+
+  if (!thread_mlfqs){
+    remove_donation (lock);
+    refresh_priority ();
+  }
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);
@@ -348,4 +361,40 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
+}
+bool donation_compare (struct list_elem *a, struct list_elem *b, bool *aux UNUSED){
+  return list_entry(a, struct thread, donation_elem)->priority >  list_entry(b, struct thread, donation_elem)->priority;
+}
+void donate_priority(void) {
+  struct thread *cur = thread_current ();
+  while(cur->waiting_lock) {
+    cur->waiting_lock->holder->priority = cur->priority;
+    cur = cur->waiting_lock->holder;
+  }
+}
+void
+remove_donation (struct lock *lock)
+{
+  struct thread *cur = thread_current ();
+
+  for (struct list_elem* e = list_begin (&cur->donation_list); e != list_end (&cur->donation_list); e = list_next (e)){
+    struct thread *t = list_entry (e, struct thread, donation_elem);
+    if (t->waiting_lock == lock)
+      list_remove (&t->donation_elem);
+  }
+}
+void
+refresh_priority (void)
+{
+  struct thread *cur = thread_current ();
+
+  cur->priority = cur->real_priority;
+  
+  if (!list_empty (&cur->donation_list)) {
+    list_sort (&cur->donation_list, donation_compare, 0);
+
+    struct thread *front = list_entry (list_front (&cur->donation_list), struct thread, donation_elem);
+    if (front->priority > cur->priority)
+      cur->priority = front->priority;
+  }
 }
