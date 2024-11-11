@@ -14,6 +14,7 @@
 #include "threads/fp.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -514,7 +515,7 @@ init_thread (struct thread *t, const char *name, int priority)
     list_push_back(&(running_thread()->child_thr), &(t->child_thr_elem));
 
     //init fd table
-    for(i=0; i<130; i++) t->fd_table[i]=NULL;
+    for(int i=0; i<130; i++) t->fd_table[i]=NULL;
     
   #endif
 }

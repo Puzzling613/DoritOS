@@ -157,7 +157,7 @@ process_exit (void)
 int create_file(struct file* f){
   struct thread* thr=thread_current();
   //add file object tp fd table
-  for(int i=3l i<130; i++){
+  for(int i=3; i<130; i++){
     if(thr->fd_table[i]==NULL){
       thr->fd_table[i]=f;
       //return file descriptor
