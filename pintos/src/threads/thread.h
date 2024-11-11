@@ -104,6 +104,19 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+
+    int exit_flag;   //exit 함수의 종료 status
+    struct thread* parent_thr;   //parent process descriptor
+    struct list child_thr;    //child list
+    struct list_elem child_thr_elem;      //child list elem
+    bool is_load;    //is program memory loaded
+    bool is_exit;    //is process exit
+    struct semaphore sema_load;     //wait for child process 생성
+    struct semaphore sema_exit;     //wait for child process 종료
+
+    //file descriptor table
+    struct file* fd_table[130];
+
 #endif
 
     /* Owned by thread.c. */
@@ -159,6 +172,8 @@ void calc_mlfqs_load_avg(void);
 void recalc_mlfqs_priority(void);
 void recalc_mlfqs_recent_cpu(void);
 void increment_recent_cpu(void);
+
+void check_addr(void *);
 
 
 #endif /* threads/thread.h */

@@ -62,6 +62,8 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+
+  sema_up(&(thread_current()->sema_load));
   
   file_name[sizeof(file_name) - 1] = '\0'; // 널문자 제거
   int argc = 0;
@@ -78,12 +80,12 @@ start_process (void *file_name_)
   palloc_free_page (file_name);
 
 
-  if (!success) 
-    thread_exit ();
-
-
+  if (!success) {
+    thread_current()->is_load=false;
+    exit(-1);
+  }
+  thread_current()->is_load=true;
   
-
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -106,7 +108,19 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  struct thread* child_thread;
+  struct list_elem* e;
+  int exit_flag;
+
+  child_thread=get_child(child_tid);
+  //not found
+  if(child_thread==NULL) return -1;
+
+  //wait until child process exit
+  sema_down(&(child_thread->sema_exit));
+  exit_flag=child_thread->is_exit;
+  list_remove(&(child_thread->child_thr_elem));
+  return exit_flag;
 }
 
 /* Free the current process's resources. */
@@ -115,6 +129,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  int i;
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -132,6 +147,43 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
+  //close all open file when process exit
+  for (i=3;i<130;i++) close_file(i);
+}
+
+/*file descriptor functions*/
+
+int create_file(struct file* f){
+  struct thread* thr=thread_current();
+  //add file object tp fd table
+  for(int i=3l i<130; i++){
+    if(thr->fd_table[i]==NULL){
+      thr->fd_table[i]=f;
+      //return file descriptor
+      return i;
+    }
+  }
+  return -1;
+}
+
+
+int get_file(int fd){
+  struct thread* thr=thread_current();
+  if(fd>=130 || fd<3) return NULL;
+  //file descriptor에 대한 객체의 주소 return
+  return thr->fd_table[fd];
+}
+
+void close_file(int fd){
+  struct thread* thr=thread_current();
+  if(fd>=130 || fd<3) return;
+  //file이 NULL인 경우 제외
+  if (thr->fd_table[fd]!=NULL){
+    //fd에 해당하는 file 닫기
+    close_file(thr->fd_table[fd]);
+    thr->fd_table[fd]=NULL;
+  }
 }
 
 /* Sets up the CPU for running user code in the current
