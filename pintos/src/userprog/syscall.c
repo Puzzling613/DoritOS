@@ -3,6 +3,7 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -231,45 +232,8 @@ close (int fd)
   close_file(fd);
 }
 
-mapid_t
-mmap (int fd, void *addr)
-{
-  return syscall2 (SYS_MMAP, fd, addr);
+void addr_check(void* vaddr){ //Reject NULL pointer, pointer to kernel address space, Unmapped virtual memory
+  if (vaddr==NULL || !(is_user_vaddr(vaddr)) || !(pagedir_get_page(thread_current()->pagedir, vaddr))==NULL){
+    exit(-1);
+  }
 }
-
-void
-munmap (mapid_t mapid)
-{
-  syscall1 (SYS_MUNMAP, mapid);
-}
-
-bool
-chdir (const char *dir)
-{
-  return syscall1 (SYS_CHDIR, dir);
-}
-
-bool
-mkdir (const char *dir)
-{
-  return syscall1 (SYS_MKDIR, dir);
-}
-
-bool
-readdir (int fd, char name[READDIR_MAX_LEN + 1]) 
-{
-  return syscall2 (SYS_READDIR, fd, name);
-}
-
-bool
-isdir (int fd) 
-{
-  return syscall1 (SYS_ISDIR, fd);
-}
-
-int
-inumber (int fd) 
-{
-  return syscall1 (SYS_INUMBER, fd);
-}
-
