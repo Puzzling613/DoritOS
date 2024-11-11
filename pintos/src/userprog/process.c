@@ -20,7 +20,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-void init_stack_arg(char **argv, uint32_t argc, struct intr_frame *if_);
+void init_stack_arg(char **argv, uint32_t argc, void** esp);
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -62,6 +62,8 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+
+  sema_up(&(thread_current()->sema_load));
   
   file_name[sizeof(file_name) - 1] = '\0'; // 널문자 제거
   int argc = 0;
@@ -72,18 +74,17 @@ start_process (void *file_name_)
   while ((token = strtok_r(rest, " ", &rest)) != NULL) {
       argv[argc++] = token;
   }
-  if(success) init_stack_arg(argv,argc, &if_);
+  if(success) init_stack_arg(argv,argc, &if_.esp);
   
   /* If load failed, quit. */
   palloc_free_page (file_name);
 
-  //hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true); //출력
-  if (!success) 
-    thread_exit ();
-
-
+  if (!success) {
+    thread_current()->is_load=false;
+    exit(-1);
+  }
+  thread_current()->is_load=true;
   
-
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -106,8 +107,19 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  timer_msleep(2000);
-  return -1;
+  struct thread* child_thread;
+  struct list_elem* e;
+  int exit_flag;
+
+  child_thread=get_child(child_tid);
+  //not found
+  if(child_thread==NULL) return -1;
+
+  //wait until child process exit
+  sema_down(&(child_thread->sema_exit));
+  exit_flag=child_thread->is_exit;
+  list_remove(&(child_thread->child_thr_elem));
+  return exit_flag;
 }
 
 /* Free the current process's resources. */
@@ -116,6 +128,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  int i;
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -133,6 +146,43 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
+  //close all open file when process exit
+  for (i=3;i<130;i++) close_file(i);
+}
+
+/*file descriptor functions*/
+
+int create_file(struct file* f){
+  struct thread* thr=thread_current();
+  //add file object tp fd table
+  for(int i=3l i<130; i++){
+    if(thr->fd_table[i]==NULL){
+      thr->fd_table[i]=f;
+      //return file descriptor
+      return i;
+    }
+  }
+  return -1;
+}
+
+
+int get_file(int fd){
+  struct thread* thr=thread_current();
+  if(fd>=130 || fd<3) return NULL;
+  //file descriptor에 대한 객체의 주소 return
+  return thr->fd_table[fd];
+}
+
+void close_file(int fd){
+  struct thread* thr=thread_current();
+  if(fd>=130 || fd<3) return;
+  //file이 NULL인 경우 제외
+  if (thr->fd_table[fd]!=NULL){
+    //fd에 해당하는 file 닫기
+    close_file(thr->fd_table[fd]);
+    thr->fd_table[fd]=NULL;
+  }
 }
 
 /* Sets up the CPU for running user code in the current
@@ -482,36 +532,43 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
-void init_stack_arg(char **argv, uint32_t argc, struct intr_frame *if_) 
+void init_stack_arg(char **argv, uint32_t argc, void **esp) 
 {
   //push arguments
+  int argv_len = 0;
   for (int i = argc - 1; i >= 0; i--)
   {
-    if_->esp -= strlen (argv[i]) + 1;
-    strlcpy (if_->esp, argv[i], strlen (argv[i]) + 1);
-    argv[i] = if_->esp;
+    *esp -= strlen (argv[i]) + 1;
+    argv_len += strlen (argv[i]) + 1;
+    strlcpy (*esp, argv[i], strlen (argv[i]) + 1);
+    argv[i] = *esp;
   }
   //alignment
-  while((unsigned int)if_->esp % 4 != 0) {
-    if_->esp--;
-    *(uint8_t *)if_->esp = 0;
-  }
-  //push argv[i]
+  if (argv_len % 4)
+    *esp -= 4 - (argv_len % 4);
+  /* Push null. */
+  *esp -= 4;
+  **(uint32_t **)esp = 0;
+
+  /* Push ARGV[i]. */
   for(int i = argc - 1; i >= 0; i--)
   {
-    if_->esp -= 4;
-    *(uint32_t *)if_->esp = *(uint32_t *)argv[i];
+    *esp -= 4;
+    **(uint32_t **)esp = argv[i];
   }
-  //push argv and argc
-  if_->esp -= 4;
-  *(uint32_t *)(if_->esp) = (uint32_t)(if_->esp + 4);
-  if_->esp -= 4;
-  *(uint32_t *)(if_->esp) = argc;
 
-  // fake return address
-  if_->esp -= 4;
-  *(uint32_t *)(if_->esp) = 0;
+  /* Push ARGV. */
+  *esp -= 4;
+  **(uint32_t **)esp = *esp + 4;
+
+  /* Push ARGC. */
+  *esp -= 4;
+  **(uint32_t **)esp = argc;
+
+  /* Push fake return address. */
+  *esp -= 4;
+  **(uint32_t **)esp = 0;
 
   printf("hex dump in construct_stack start\n\n"); 
-  hex_dump(if_->esp, if_->esp, 100, true);
+  hex_dump(*esp, *esp, 100, true);
 }

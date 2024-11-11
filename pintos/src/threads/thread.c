@@ -304,6 +304,8 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
+  //sema up parent process
+  sema_up(&(thread_current()->sema_exit));
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -499,6 +501,22 @@ init_thread (struct thread *t, const char *name, int priority)
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
+
+  #ifdef USERPROG
+    //save parent process
+    t->parent_thr=running_thread();
+    sema_init(&(t->sema_load), 0);
+    sema_init(&(t->sema_exit), 0);
+
+    //init child list
+    list_init(&(t->child_thr));
+    //push to running thread's child list
+    list_push_back(&(running_thread()->child_thr), &(t->child_thr_elem));
+
+    //init fd table
+    for(int i=0; i<130; i++) t->fd_table[i]=NULL;
+    
+  #endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -570,7 +588,8 @@ thread_schedule_tail (struct thread *prev)
   if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
     {
       ASSERT (prev != cur);
-      palloc_free_page (prev);
+      //prevent process descriptor delete
+      // palloc_free_page (prev);
     }
 }
 
@@ -702,4 +721,22 @@ void increment_recent_cpu(void){
     int curr_cpu = thread_current()->recent_cpu;
     thread_current()->recent_cpu = add_fpint(curr_cpu, 1);
   }
+}
+
+void addr_check(void* vaddr){ //Reject NULL pointer, pointer to kernel address space, Unmapped virtual memory
+  if (vaddr==NULL || !(is_user_vaddr(vaddr)) || !(pagedir_get_page(thread_current()->pagedir, vaddr))==NULL){
+    exit(-1);
+  }
+}
+
+//find thread with specific pid and return
+struct thread* get_child(pid_t pid){ 
+  struct thread* child_thread;
+  struct list_elem* e;
+  for (e=list_begin(&(thread_current()->child_thr)); e!=list_end(&(thread_current()->child_thr)); e=list_next(e)){
+    child_thread=list_entry(e, struct thread, child_thr_elem);
+    if(pid==child_thread->tid) return child_thread;
+  }
+  //not in list
+  return NULL;
 }
