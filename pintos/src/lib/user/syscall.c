@@ -64,150 +64,81 @@
 void
 halt (void) 
 {
-  shutdown_power_off();
+  syscall0 (SYS_HALT);
+  NOT_REACHED ();
 }
 
 void
 exit (int status)
 {
-  struct thread *t=thread_current();
-  printf("%s: exit(%d)\n", thread_name(), status);
-  t->exit_flag=status;
-  thread_exit();
+  syscall1 (SYS_EXIT, status);
+  NOT_REACHED ();
 }
 
 pid_t
 exec (const char *file)
 {
-  tid_t tid=process_execute(file);
-  struct thread* t=get_child(tid);
-
-  if(tid!=NULL){
-    sema_down(&(t->sema_load));
-    if(t->is_load==false) return -1;
-    else return tid;
-  }
-  return -1;
+  return (pid_t) syscall1 (SYS_EXEC, file);
 }
 
 int
 wait (pid_t pid)
 {
-  process_wait(pid);
+  return syscall1 (SYS_WAIT, pid);
 }
 
 bool
 create (const char *file, unsigned initial_size)
 {
-  if (file==NULL) exit(-1);
-  return filesys_create(file, initial_size);
+  return syscall2 (SYS_CREATE, file, initial_size);
 }
 
 bool
 remove (const char *file)
 {
-  if (file==NULL) exit(-1);
-  return filesys_remove(file);
+  return syscall1 (SYS_REMOVE, file);
 }
 
 int
 open (const char *file)
 {
-  struct file* f;
-  int fd;
-  if (file==NULL) exit(-1);
-  
-  lock_acquire(&file_lock);
-  f=filesys_open(file);
-  if (f==NULL){
-    lock_release(&file_lock);
-    return -1;
-  }
-  fd=create_file(f);
-  lock_release(&file_lock);
-  return fd;
+  return syscall1 (SYS_OPEN, file);
 }
 
 int
 filesize (int fd) 
 {
-  struct file* f=get_file(fd);
-  if(f==NULL) exit(-1);
-  return file_length(f);
+  return syscall1 (SYS_FILESIZE, fd);
 }
 
 int
 read (int fd, void *buffer, unsigned size)
 {
-  int res;
-  uint8_t tmp;
-  if (fd==1 || fd<0 || fd>=130) exit(-1);
-  addr_check(buffer);
-  lock_acquire(&file_lock);
-  if(fd!=0){
-    struct file* f=get_file(fd);
-    if(f==NULL){
-      lock_release(&file_lock);
-      exit(-1);
-    }
-    res=file_read(f, buffer, size);
-  }
-  else{
-    for (res=0;(tmp=input_getc())&&(res<size);res++){
-      *(uint8_t*)(buffer+res)=tmp;
-    }
-  }
-  lock_release(&file_lock);
-  return res;
+  return syscall3 (SYS_READ, fd, buffer, size);
 }
 
 int
 write (int fd, const void *buffer, unsigned size)
 {
-  int res;
-  struct file* f;
-  if (fd<=0 || fd>=130) exit(-1);
-  addr_check;
-  lock_acquire(&file_lock);
-  if(fd!=1){
-    f=get_file(fd);
-    if(f==NULL){
-      lock_release(&file_lock);
-      exit(-1);
-    }
-    res=file_write(f, buffer, size);
-    lock_release(&file_lock);
-    return res;
-  }
-  else{
-    putbuf(buffer, size);
-    lock_release(&file_lock);
-    return size;
-  }
-  lock_release(&file_lock);
-  return res;
+  return syscall3 (SYS_WRITE, fd, buffer, size);
 }
 
 void
 seek (int fd, unsigned position) 
 {
-  struct file* f=get_file(fd);
-  if(f==NULL) exit(-1);
-  file_seek(f, position);
+  syscall2 (SYS_SEEK, fd, position);
 }
 
 unsigned
 tell (int fd) 
 {
-  struct file* f=get_file(fd);
-  if(f==NULL) exit(-1);
-  return file_tell(f);
+  return syscall1 (SYS_TELL, fd);
 }
 
 void
 close (int fd)
 {
-  close_file(fd);
+  syscall1 (SYS_CLOSE, fd);
 }
 
 mapid_t

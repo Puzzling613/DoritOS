@@ -724,12 +724,6 @@ void increment_recent_cpu(void){
   }
 }
 
-void addr_check(void* vaddr){ //Reject NULL pointer, pointer to kernel address space, Unmapped virtual memory
-  if (vaddr==NULL || !(is_user_vaddr(vaddr)) || !(pagedir_get_page(thread_current()->pagedir, vaddr))==NULL){
-    exit(-1);
-  }
-}
-
 //find thread with specific pid and return
 struct thread* get_child(pid_t pid){ 
   struct thread* child_thread;

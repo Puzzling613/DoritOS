@@ -20,6 +20,7 @@ int write(int fd, const void* buffer, unsigned int size);
 void seek(int fd, unsigned int position);
 unsigned int tell(int fd);
 void close(int fd);
+void addr_check(void* vaddr);
 
 struct lock file_lock;
 
