@@ -30,7 +30,7 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-
+  
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -39,7 +39,7 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
   char *rest;
   char *program_name = strtok_r(fn_copy, " ", &rest);
-
+  printf("process_execute출력: program_name: %s", program_name);
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
@@ -72,12 +72,12 @@ start_process (void *file_name_)
   while ((token = strtok_r(rest, " ", &rest)) != NULL) {
       argv[argc++] = token;
   }
-  init_stack_arg(argv,argc, &if_);
-
+  if(success) init_stack_arg(argv,argc, &if_);
+  
   /* If load failed, quit. */
   palloc_free_page (file_name);
 
-
+  //hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true); //출력
   if (!success) 
     thread_exit ();
 
@@ -106,6 +106,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  timer_msleep(2000);
   return -1;
 }
 
@@ -510,4 +511,7 @@ void init_stack_arg(char **argv, uint32_t argc, struct intr_frame *if_)
   // fake return address
   if_->esp -= 4;
   *(uint32_t *)(if_->esp) = 0;
+
+  printf("hex dump in construct_stack start\n\n"); 
+  hex_dump(if_->esp, if_->esp, 100, true);
 }
