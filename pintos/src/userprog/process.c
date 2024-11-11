@@ -20,7 +20,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-
+void init_stack_arg(char **argv, uint32_t argc, struct intr_frame *if_);
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -37,9 +37,11 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  char *rest;
+  char *program_name = strtok_r(fn_copy, " ", &rest);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -60,11 +62,27 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  
+  file_name[sizeof(file_name) - 1] = '\0'; // 널문자 제거
+  int argc = 0;
+  char *argv[64]; //128byte limit라 띄어쓰기 빼고 64개 limit 지정
+  char *token;
+  char *rest = file_name;
+  //문자열을 파싱해 argv에 저장
+  while ((token = strtok_r(rest, " ", &rest)) != NULL) {
+      argv[argc++] = token;
+  }
+  init_stack_arg(argv,argc, &if_);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
+
+
   if (!success) 
     thread_exit ();
+
+
+  
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -462,4 +480,34 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+void init_stack_arg(char **argv, uint32_t argc, struct intr_frame *if_) 
+{
+  //push arguments
+  for (int i = argc - 1; i >= 0; i--)
+  {
+    if_->esp -= strlen (argv[i]) + 1;
+    strlcpy (if_->esp, argv[i], strlen (argv[i]) + 1);
+    argv[i] = if_->esp;
+  }
+  //alignment
+  while((unsigned int)if_->esp % 4 != 0) {
+    if_->esp--;
+    *(uint8_t *)if_->esp = 0;
+  }
+  //push argv[i]
+  for(int i = argc - 1; i >= 0; i--)
+  {
+    if_->esp -= 4;
+    *(uint32_t *)if_->esp = *(uint32_t *)argv[i];
+  }
+  //push argv and argc
+  if_->esp -= 4;
+  *(uint32_t *)(if_->esp) = (uint32_t)(if_->esp + 4);
+  if_->esp -= 4;
+  *(uint32_t *)(if_->esp) = argc;
+
+  // fake return address
+  if_->esp -= 4;
+  *(uint32_t *)(if_->esp) = 0;
 }
