@@ -136,13 +136,9 @@ process_exit (void)
   uint32_t *pd;
 
   //close all open file when process exit
-  file_close(cur->exec_file);
+  file_close(cur->run_file);
   for (int i=3;i<128;i++) close_file(i);
 
-  file_close(cur->run_file);
-  // for(i=3;i<FDTABLE_SIZE;i++){
-  //   process_close_file(i);
-  // } //hourglass
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
