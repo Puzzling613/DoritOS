@@ -20,7 +20,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-void init_stack_arg(char **argv, uint32_t argc, void** esp);
+void init_stack_arg(char **argv, int argc, void** esp);
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -38,8 +38,8 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
   char *rest;
-  char *program_name = strtok_r(fn_copy, " ", &rest);
-  printf("process_execute출력: program_name: %s", program_name);
+  char *program_name = strtok_r(file_name, " ", &rest);
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
@@ -61,23 +61,29 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
 
-  sema_up(&(thread_current()->sema_load));
-  
-  file_name[sizeof(file_name) - 1] = '\0'; // 널문자 제거
   int argc = 0;
   char *argv[64]; //128byte limit라 띄어쓰기 빼고 64개 limit 지정
-  char *token;
-  char *rest = file_name;
+
+  int len = strlen(file_name) + 1;
+  char * _file_name = (char *)malloc(len);
+  strlcpy(_file_name, file_name, len);
+  char * token;
+
   //문자열을 파싱해 argv에 저장
-  while ((token = strtok_r(rest, " ", &rest)) != NULL) {
+  while ((token = strtok_r(_file_name, " ", &_file_name)) != NULL) {
       argv[argc++] = token;
   }
+  // for (int i = 0; i < argc; i++) {
+  //       printf("argv[%d]: %s\n", i, argv[i]);
+  // }
+  success = load (argv[0], &if_.eip, &if_.esp);
   if(success) init_stack_arg(argv,argc, &if_.esp);
-  
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
+
+  sema_up(&(thread_current()->sema_load));
 
   if (!success) {
     thread_current()->is_load=false;
@@ -427,7 +433,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
      it then user code that passed a null pointer to system calls
      could quite likely panic the kernel by way of null pointer
      assertions in memcpy(), etc. */
-  if (phdr->p_vaddr < PGSIZE)
+  if (phdr->p_vaddr < PGSIZE) 
     return false;
 
   /* It's okay. */
@@ -532,43 +538,48 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
-void init_stack_arg(char **argv, uint32_t argc, void **esp) 
+void init_stack_arg(char **argv, int argc, void **esp) 
 {
+  
   //push arguments
   int argv_len = 0;
+  int len;
   for (int i = argc - 1; i >= 0; i--)
   {
-    *esp -= strlen (argv[i]) + 1;
-    argv_len += strlen (argv[i]) + 1;
-    strlcpy (*esp, argv[i], strlen (argv[i]) + 1);
+    len = strlen(argv[i]);
+    *esp -= len + 1;
+    argv_len += len + 1;
+    strlcpy (*esp, argv[i], len + 1);
     argv[i] = *esp;
   }
   //alignment
   if (argv_len % 4)
     *esp -= 4 - (argv_len % 4);
+
   /* Push null. */
   *esp -= 4;
-  **(uint32_t **)esp = 0;
+  *(uint32_t *)*esp = 0;
 
   /* Push ARGV[i]. */
   for(int i = argc - 1; i >= 0; i--)
   {
     *esp -= 4;
-    **(uint32_t **)esp = argv[i];
+    *(uint32_t *)*esp = argv[i];
   }
 
   /* Push ARGV. */
   *esp -= 4;
-  **(uint32_t **)esp = *esp + 4;
+  *(uint32_t *)*esp = *esp + 4;
 
   /* Push ARGC. */
   *esp -= 4;
-  **(uint32_t **)esp = argc;
+  *(uint32_t *)*esp = argc;
 
   /* Push fake return address. */
   *esp -= 4;
-  **(uint32_t **)esp = 0;
+  *(uint32_t *)*esp = 0;
 
   printf("hex dump in construct_stack start\n\n"); 
   hex_dump(*esp, *esp, 100, true);
+
 }

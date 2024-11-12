@@ -667,7 +667,7 @@ void thread_awake(int64_t curr_time){
 }
 void thread_yield_after_compare(void) {
   /* Compare the priority of running thread and ready list's supreme thread */
-  if (!list_empty (&ready_list) && thread_current()->priority < list_entry(list_front(&ready_list), struct thread, elem)->priority) {
+  if (!intr_context() && !list_empty (&ready_list) && thread_current()->priority < list_entry(list_front(&ready_list), struct thread, elem)->priority) {
     thread_yield(); 
   }
 }
