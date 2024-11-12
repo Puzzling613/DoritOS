@@ -17,7 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-
+#include "userprog/syscall.h"
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 void init_stack_arg(char **argv, int argc, void** esp);
@@ -136,6 +136,10 @@ process_exit (void)
   uint32_t *pd;
   int i;
 
+  file_close(cur->run_file);
+  // for(i=3;i<FDTABLE_SIZE;i++){
+  //   process_close_file(i);
+  // } //hourglass
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -297,13 +301,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  lock_acquire(&file_lock);
   file = filesys_open (file_name);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
-
+  t->run_file = file;
+  file_deny_write(t->run_file); //hourglass
+  lock_release(&file_lock);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -387,7 +394,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  //file_close (file);
   return success;
 }
 
@@ -579,7 +586,7 @@ void init_stack_arg(char **argv, int argc, void **esp)
   *esp -= 4;
   *(uint32_t *)*esp = 0;
 
-  printf("hex dump in construct_stack start\n\n"); 
-  hex_dump(*esp, *esp, 100, true);
+  // printf("hex dump in construct_stack start\n\n"); 
+  // hex_dump(*esp, *esp, 100, true);
 
 }
