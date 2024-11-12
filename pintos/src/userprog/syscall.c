@@ -61,7 +61,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       addr_check(f->esp+4);
       addr_check(f->esp+8);
       addr_check(f->esp+12);
-      f->eax = read((int)*(uint32_t*)(f->esp+4), (const void*)*(uint32_t*)(f->esp+8),
+      f->eax = write((int)*(uint32_t*)(f->esp+4), (const void*)*(uint32_t*)(f->esp+8),
 					(unsigned)*(uint32_t*)(f->esp+12));
       break;
     case SYS_SEEK:
@@ -228,7 +228,7 @@ close (int fd)
 }
 
 void addr_check(void* vaddr){ //Reject NULL pointer, pointer to kernel address space, Unmapped virtual memory
-  if (vaddr==NULL || !(is_user_vaddr(vaddr)) || !(pagedir_get_page(thread_current()->pagedir, vaddr))==NULL){
+  if (vaddr==NULL || !is_user_vaddr(vaddr) || !pagedir_get_page(thread_current()->pagedir, vaddr)==NULL){
     exit(-1);
   }
 }

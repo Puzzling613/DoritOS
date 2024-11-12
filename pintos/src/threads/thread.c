@@ -516,7 +516,6 @@ init_thread (struct thread *t, const char *name, int priority)
 
     //init fd table
     for(int i=0; i<128; i++) t->fd_table[i]=NULL;
-    
   #endif
 }
 

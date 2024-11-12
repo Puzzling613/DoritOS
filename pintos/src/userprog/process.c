@@ -18,6 +18,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/syscall.h"
+#include "devices/timer.h"
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 void init_stack_arg(char **argv, int argc, void** esp);
@@ -126,6 +127,8 @@ process_wait (tid_t child_tid UNUSED)
   exit_flag=child->exit_flag;
   list_remove(&(child->child_thr_elem));
   return exit_flag;
+  // timer_msleep(2000);
+  // return -1;
 }
 
 /* Free the current process's resources. */
