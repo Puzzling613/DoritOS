@@ -116,7 +116,7 @@ struct thread
     struct semaphore sema_exit;     //wait for child process 종료
 
     //file descriptor table
-    struct file* fd_table[130];
+    struct file* fd_table[128];
 
 #endif
 

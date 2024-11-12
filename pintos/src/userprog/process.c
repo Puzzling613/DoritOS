@@ -113,18 +113,18 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  struct thread* child_thread;
+  struct thread* child;
   struct list_elem* e;
   int exit_flag;
 
-  child_thread=get_child(child_tid);
+  child=get_child(child_tid);
   //not found
-  if(child_thread==NULL) return -1;
+  if(child==NULL) return -1;
 
   //wait until child process exit
-  sema_down(&(child_thread->sema_exit));
-  exit_flag=child_thread->is_exit;
-  list_remove(&(child_thread->child_thr_elem));
+  sema_down(&(child->sema_exit));
+  exit_flag=child->exit_flag;
+  list_remove(&(child->child_thr_elem));
   return exit_flag;
 }
 
@@ -134,7 +134,10 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-  int i;
+
+  //close all open file when process exit
+  file_close(cur->exec_file);
+  for (int i=3;i<128;i++) close_file(i);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -152,9 +155,6 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-
-  //close all open file when process exit
-  for (i=3;i<130;i++) close_file(i);
 }
 
 /*file descriptor functions*/
@@ -162,7 +162,7 @@ process_exit (void)
 int create_file(struct file* f){
   struct thread* thr=thread_current();
   //add file object tp fd table
-  for(int i=3; i<130; i++){
+  for(int i=3; i<128; i++){
     if(thr->fd_table[i]==NULL){
       thr->fd_table[i]=f;
       //return file descriptor
@@ -172,21 +172,20 @@ int create_file(struct file* f){
   return -1;
 }
 
-
 int get_file(int fd){
   struct thread* thr=thread_current();
-  if(fd>=130 || fd<3) return NULL;
+  if(fd>=128 || fd<3) return NULL;
   //file descriptor에 대한 객체의 주소 return
   return thr->fd_table[fd];
 }
 
 void close_file(int fd){
   struct thread* thr=thread_current();
-  if(fd>=130 || fd<3) return;
+  if(fd>=128 || fd<3) return;
   //file이 NULL인 경우 제외
   if (thr->fd_table[fd]!=NULL){
     //fd에 해당하는 file 닫기
-    close_file(thr->fd_table[fd]);
+    file_close(thr->fd_table[fd]);
     thr->fd_table[fd]=NULL;
   }
 }

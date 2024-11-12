@@ -303,13 +303,13 @@ thread_exit (void)
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
-  intr_disable ();
+  intr_disable();
   list_remove (&thread_current()->allelem);
   //sema up parent process
   sema_up(&(thread_current()->sema_exit));
-  thread_current ()->status = THREAD_DYING;
-  schedule ();
-  NOT_REACHED ();
+  thread_current()->status = THREAD_DYING;
+  schedule();
+  NOT_REACHED();
 }
 
 /* Yields the CPU.  The current thread is not put to sleep and
@@ -515,7 +515,7 @@ init_thread (struct thread *t, const char *name, int priority)
     list_push_back(&(running_thread()->child_thr), &(t->child_thr_elem));
 
     //init fd table
-    for(int i=0; i<130; i++) t->fd_table[i]=NULL;
+    for(int i=0; i<128; i++) t->fd_table[i]=NULL;
     
   #endif
 }
@@ -726,11 +726,11 @@ void increment_recent_cpu(void){
 
 //find thread with specific pid and return
 struct thread* get_child(pid_t pid){ 
-  struct thread* child_thread;
+  struct thread* child;
   struct list_elem* e;
   for (e=list_begin(&(thread_current()->child_thr)); e!=list_end(&(thread_current()->child_thr)); e=list_next(e)){
-    child_thread=list_entry(e, struct thread, child_thr_elem);
-    if(pid==child_thread->tid) return child_thread;
+    child=list_entry(e, struct thread, child_thr_elem);
+    if(pid==child->tid) return child;
   }
   //not in list
   return NULL;

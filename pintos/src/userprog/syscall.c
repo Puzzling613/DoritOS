@@ -77,9 +77,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       addr_check(f->esp+4);
       close(*(uint32_t*)(f->esp+4));
       break;
-    default:
-      exit(-1);
-      break;
   }
 }
 
@@ -95,7 +92,6 @@ exit (int status)
   struct thread *t=thread_current();
   printf("%s: exit(%d)\n", thread_name(), status);
   t->exit_flag=status;
-  printf ("%s: exit(%d)\n", t->name, status);
   thread_exit();
 }
 
@@ -164,7 +160,7 @@ read (int fd, void *buffer, unsigned size)
 {
   int res;
   uint8_t tmp;
-  if (fd==1 || fd<0 || fd>=130) exit(-1);
+  if (fd>=128 || fd<0 || fd==1) exit(-1);
   addr_check(buffer);
   lock_acquire(&file_lock);
   if(fd!=0){
@@ -189,7 +185,7 @@ write (int fd, const void *buffer, unsigned size)
 {
   int res;
   struct file* f;
-  if (fd<=0 || fd>=130) exit(-1);
+  if (fd>=128 || fd<=0) exit(-1);
   addr_check;
   lock_acquire(&file_lock);
   if(fd!=1){
@@ -207,8 +203,6 @@ write (int fd, const void *buffer, unsigned size)
     lock_release(&file_lock);
     return size;
   }
-  lock_release(&file_lock);
-  return res;
 }
 
 void
