@@ -114,9 +114,11 @@ struct thread
     bool is_exit;    //is process exit
     struct semaphore sema_load;     //wait for child process 생성
     struct semaphore sema_exit;     //wait for child process 종료
-
+   
     //file descriptor table
     struct file* fd_table[128];
+
+    struct file * run_file;
 
 #endif
 
