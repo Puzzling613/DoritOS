@@ -228,7 +228,7 @@ close (int fd)
 }
 
 void addr_check(void* vaddr){ //Reject NULL pointer, pointer to kernel address space, Unmapped virtual memory
-  if (vaddr==NULL || !is_user_vaddr(vaddr) || !pagedir_get_page(thread_current()->pagedir, vaddr)==NULL){
+  if (vaddr==NULL || !is_user_vaddr(vaddr) || pagedir_get_page(thread_current()->pagedir, vaddr)==NULL){
     exit(-1);
   }
 }
