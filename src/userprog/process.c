@@ -1,3 +1,4 @@
+#include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
@@ -6,7 +7,6 @@
 #include <string.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
-#include "userprog/process.h"
 #include "userprog/tss.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
@@ -17,111 +17,116 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "lib/user/syscall.h"
-
-/*---------------------------------------------------------------------------*/
-/* Process Control Block */
-
-static struct lock pid_lock;
-static struct lock file_lock;
-
-/*---------------------------------------------------------------------------*/
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-static void parse_args (char *cmd_line_str, char **argv, size_t *argv_len, 
-  uint32_t *argc);
-static void setup_args_stack (char **argv, size_t *argv_len, uint32_t argc, 
-  void **esp);
-static pid_t allocate_pid (void);
-
-/* Initialize the locks used throughout process management, 
-   initialize the process struct of the main thread, 
-   and create the connections between the main thread and process. */
-void
-process_init(void)
-{
-  struct process *p;
-  struct thread *t;
-
-  // Main Thread
-  t = thread_current();
-
-  lock_init(&pid_lock);
-  lock_init(&file_lock);
-  
-  p = palloc_get_page (PAL_ZERO);
-  if(p == NULL)
-  {
-    palloc_free_page(p);
-    PANIC("Main Process Init Fail");
-  }
-
-  init_process(p);
-  t->process_ptr = p;
-  p->tid = t->tid;
-}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *command) 
 {
-  /* Command: File Name + Arguments */
-  char *full_cmd_line_copy;
-  /* Just File Name */
-  char *file_name_copy;
-  char *save_ptr;
-  struct process *p;
+  struct thread* cur = thread_current();
+  char *fn_copy;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  full_cmd_line_copy = palloc_get_page (0);
-  if (full_cmd_line_copy == NULL)
+  fn_copy = palloc_get_page (0);
+  if (fn_copy == NULL)
     return TID_ERROR;
-  file_name_copy = palloc_get_page (0);
-  if (file_name_copy == NULL)
-    return TID_ERROR;
+  strlcpy (fn_copy, command, PGSIZE);
 
-  strlcpy (full_cmd_line_copy, file_name, PGSIZE);
-  strlcpy (file_name_copy, file_name, PGSIZE);
-
-  strtok_r (file_name_copy, " ", &save_ptr);
-  
-  /*-------------------------------------------------------------------------*/
-  /* Initialize Child Process Info */
-  p = palloc_get_page (PAL_ZERO);
-  if (p == NULL)
-  {
-    return TID_ERROR;
-  }
-  init_process(p);
-  list_push_back(&thread_current()->process_ptr->children, &p->elem);
-  /*-------------------------------------------------------------------------*/
+  struct parse_result* result = parse_command(fn_copy);
+  result->parent = cur;
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create_with_pcb (file_name_copy, PRI_DEFAULT, p, start_process, 
-    full_cmd_line_copy);
-  palloc_free_page (file_name_copy);
+  tid = thread_create (result->argv[0], PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
-  {
-    palloc_free_page (full_cmd_line_copy);
-    palloc_free_page (p);
+    palloc_free_page (fn_copy); 
+
+  sema_down(&cur->load_sema);
+
+  struct thread* child = get_child(tid);
+  if (child == NULL)
     return TID_ERROR;
+
+  if (!child->is_loaded){
+    process_wait(tid);
+    tid = TID_ERROR;
+  }
+  
+  return tid;
+}
+
+struct parse_result* parse_command(char* command){
+  char* tmp = palloc_get_page(PAL_ZERO);
+  strlcpy(tmp, command, PGSIZE);
+  struct parse_result* result = (struct parse_result*)command;
+  result->argc = 0;
+  
+  const char *delim = " ";
+  char *save_ptr = NULL;
+  char *token = strtok_r ((char*)tmp, delim, &save_ptr);
+  
+  size_t len; 
+  char *base = &result->data_start;
+  char *next = base;
+
+  while (token != NULL && result->argc < MAX_ARGC){
+    len = strlcpy(next, token, 128);
+    
+    result->argv[result->argc] = next;
+    result->argc++;
+    next += (len + 1);
+    token = strtok_r (NULL, delim, &save_ptr);
   }
 
-  /* System call Exec Load Sync */
-  sema_down(&(p->exec_load_sema));
-  if (p->pid == PID_ERROR)
-  {
-    palloc_free_page (p);
-    return TID_ERROR;
+  result->data_size = next - base;
+
+  palloc_free_page (tmp);
+  return result;
+}
+
+void push_stack(char **rsp, void* val, int size){
+  *rsp -= size;
+  memcpy(*rsp, val, size);
+}
+
+void pop_stack(char **rsp, void* dst, int size){
+  memcpy(dst, *rsp, size);
+  *rsp += size;
+}
+
+static void construct_stack(struct parse_result* command, char **rsp){
+  char *base = &command->data_start;
+
+  push_stack(rsp, base, command->data_size);
+  char *stack_base = *rsp;
+
+  int pad_size = (4 - (command->data_size % 4)) % 4;
+  pad_size += sizeof(char*);
+
+  int i = 0;
+  for (; i < pad_size; ++i) {
+    char val = 0;
+    push_stack(rsp, &val, sizeof(val));
   }
-    
-  return tid;
+
+  for (i = command->argc - 1; i >= 0; --i){
+    char* val = stack_base + (command->argv[i] - base);
+    push_stack(rsp, &val, sizeof(val));
+  }
+
+  stack_base = *rsp;
+
+  push_stack(rsp, &stack_base, sizeof(stack_base));
+  push_stack(rsp, &command->argc, sizeof(command->argc));
+  
+  void* ret = NULL;
+  push_stack(rsp, &ret, sizeof(ret));
 }
 
 /* A thread function that loads a user process and starts it
@@ -129,52 +134,38 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  char *file_name = file_name_;
+  struct parse_result *result = file_name_;
   struct intr_frame if_;
+  struct thread* cur = thread_current();
   bool success;
-  struct thread *t;
-
-  /* argv: process arguments str point array */
-  /* argv_len: process arguments str length array */
-  /* argc: process arguments count */
-  char **argv;
-  size_t *argv_len;
-  uint32_t argc = 0;
-  success = true;
-  t = thread_current();
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  
-  argv = palloc_get_page (0);
-  if (argv == NULL)
-    success = false;
 
-  argv_len = palloc_get_page (0);
-  if (argv_len == NULL)
-    success = false;
-  
-  /* file_name stops at the null character only at the end of the pure file name */
-  parse_args (file_name, argv, argv_len, &argc);
-  success = load (file_name, &if_.eip, &if_.esp) && success;
-  if (success)
-    setup_args_stack (argv, argv_len, argc, &if_.esp);
-  else
-    t->process_ptr->pid = PID_ERROR;
-  
-  palloc_free_page (file_name);
-  palloc_free_page (argv);
-  palloc_free_page (argv_len);
+  success = load (result->argv[0], &if_.eip, &if_.esp);
 
-  /* System call Exec Load Sync */
-  sema_up (&t->process_ptr->exec_load_sema);
+  // 성공시 stack construct
+  if (success) {
+    construct_stack(result, &if_.esp);
+  }
 
-  /* If load failed, quit. */
-  if (!success) 
-    thread_exit ();
+  list_push_back(&result->parent->list_children, &cur->child_elem);
+
+  // 로드가 다 되었음을 알린다.
+  cur->is_loaded = success;
+  sema_up(&result->parent->load_sema);
+  
+  palloc_free_page (result);
+
+  // 로드 실패 시, 부모가 확인한 후 죽는다.
+  if (!success) {
+    cur->exit_status = -1;
+    thread_exit();
+  }
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -183,87 +174,6 @@ start_process (void *file_name_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
-}
-
-/* Parse the cmd_line_str and store the starting addresses of the arguments in 
-   argv, the lengths of each argument in argv_len, 
-   and the number of arguments in argc. */
-static void
-parse_args (char *cmd_line_str, char **argv, size_t *argv_len, uint32_t *argc)
-{
-  char *arg, *save_ptr;
-
-  for (arg = strtok_r (cmd_line_str, " ", &save_ptr); arg != NULL; 
-    arg = strtok_r (NULL, " ", &save_ptr))
-  {
-    argv_len[*argc] = strlen (arg) + 1;
-    argv[*argc] = arg;
-    (*argc)++;
-  }
-}
-
-/* A function that formats and pushes arguments for the loaded program 
-   onto the stack.
-   The stack is set according to the following format.
-
-   Example cmd line: "/bin/ls -l foo bar" 
-   Address 	    Name 	            Data 	        Type
-   0xbffffffc 	argv[3][...] 	    "bar\0" 	    char[4]
-   0xbffffff8 	argv[2][...] 	    "foo\0" 	    char[4]
-   0xbffffff5 	argv[1][...] 	    "-l\0" 	      char[3]
-   0xbfffffed 	argv[0][...] 	    "/bin/ls\0" 	char[8]
-   0xbfffffec 	word-align 	      0 	          uint8_t
-   0xbfffffe8 	argv[4] 	        0 	          char *
-   0xbfffffe4 	argv[3] 	        0xbffffffc 	  char *
-   0xbfffffe0 	argv[2] 	        0xbffffff8 	  char *
-   0xbfffffdc 	argv[1] 	        0xbffffff5 	   char *
-   0xbfffffd8 	argv[0] 	        0xbfffffed 	  char *
-   0xbfffffd4 	argv 	            0xbfffffd8 	  char **
-   0xbfffffd0 	argc 	            4 	          int
-   0xbfffffcc 	return address 	  0 	          void (*) ()   <- esp
-*/
-static void
-setup_args_stack (char **argv, size_t *argv_len, uint32_t argc, 
-  void **esp)
-{
-  /* argv string */
-  char *ptr_argv = (char*) *esp;
-  for (int i = argc - 1; i >= 0; i--)
-  {
-    ptr_argv = ptr_argv - (char*) (argv_len[i]);
-    strlcpy (ptr_argv, (const char*) argv[i], (size_t) (argv_len[i]));
-  }
-
-  /* Word Align */
-  ptr_argv = (char *)(((uint32_t) ptr_argv) - ((uint32_t) ptr_argv) % 4);
-  ptr_argv -= 4;
-
-  char** ptr_argv_addr = (char **) ptr_argv;
-  
-  *((uint32_t *) ptr_argv_addr) = 0;
-  ptr_argv_addr--;
-
-  /* argv string pointer */
-  char* argv_addr_iter_ptr = (char*) *esp; 
-  for(int i = argc-1; i >= 0; i--)
-  {
-    argv_addr_iter_ptr -= argv_len[i];
-    *ptr_argv_addr = (char *) argv_addr_iter_ptr;
-    ptr_argv_addr--;
-  }
-
-  /* argv address */
-  *ptr_argv_addr = (char**) (ptr_argv_addr + 1);
-  ptr_argv_addr--;
-
-  /* argument count */
-  *(uint32_t*) ptr_argv_addr = argc;
-  ptr_argv_addr--;
-  
-  *ptr_argv_addr = 0;
-  
-  void* ori_if_esp = *esp;
-  *esp = (void*) ptr_argv_addr;
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -278,27 +188,36 @@ setup_args_stack (char **argv, size_t *argv_len, uint32_t argc,
 int
 process_wait (tid_t child_tid) 
 {
-  struct thread *cur = thread_current();
-  struct list *children = &cur->process_ptr->children;
-  if (child_tid == TID_ERROR)
-  {
+  struct thread *child = get_child(child_tid);
+  int exit_status;
+
+  if (child == NULL)
     return -1;
+
+  sema_down(&child->wait_sema);
+
+  exit_status = child->exit_status;
+  list_remove(&child->child_elem);
+
+  sema_up(&child->exit_sema);
+
+  return exit_status;
+}
+
+void close_all_files(struct thread *cur) {
+  struct list_elem *it = list_begin(&cur->list_file);
+  struct list_elem *end = list_end(&cur->list_file);
+
+  for(; it != end;) {
+    struct file_elem *f_elem = list_entry(it, struct file_elem, elem);
+    it = list_remove(it);
+
+    file_close(f_elem->file);
+    palloc_free_page(f_elem);
   }
-  
-  for (struct list_elem *e = list_begin (children); e != list_end (children); 
-    e = list_next (e))
-  {
-    struct process *p = list_entry(e, struct process, elem);
-    if (p->tid == child_tid)
-    {
-      sema_down (&p->exit_code_sema);
-      list_remove (e);
-      int exit_code = p->exit_code;
-      palloc_free_page (p);
-      return exit_code;
-    }
-  }
-  return -1;
+
+  if (cur->exec_file)
+    file_close(cur->exec_file);
 }
 
 /* Free the current process's resources. */
@@ -307,6 +226,26 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  close_all_files(cur);
+
+  // 모든 자녀의 죽음을 허용한다.
+  struct list_elem *it = list_begin(&cur->list_children);
+  struct list_elem *end = list_end(&cur->list_children);
+
+  for(; it != end;){
+    struct thread *child = list_entry(it, struct thread, child_elem);
+    it = list_remove(it);
+
+    sema_down(&child->wait_sema);
+    sema_up(&child->exit_sema);
+  }
+
+  // 프린트
+  printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+
+  // 나 exit-> 부모 wait -> 나 die
+  sema_up(&cur->wait_sema);
+  sema_down(&cur->exit_sema);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -432,13 +371,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file_lock_acquire();
   file = filesys_open (file_name);
+  
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
+  t->exec_file = file;
+  file_deny_write(file);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -518,15 +460,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
-
   success = true;
-  file_deny_write(file);
-  t->process_ptr->file_exec = file;
 
  done:
   /* We arrive here whether the load is successful or not. */
-  if(!success) file_close(file);
-  file_lock_release();
   return success;
 }
 
@@ -676,87 +613,4 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
-}
-
-/*---------------------------------------------------------------------------*/
-/* Process Control Block */
-
-static pid_t
-allocate_pid (void)
-{
-  static pid_t next_pid = 1;
-  pid_t pid;
-
-  lock_acquire (&pid_lock);
-  pid = next_pid++;
-  lock_release (&pid_lock);
-
-  return pid;
-}
-
-void
-init_process (struct process *p)
-{
-  memset (p, 0, sizeof *p);
-  p->pid = allocate_pid ();
-  sema_init (&p->exit_code_sema, 0);
-  sema_init (&p->exec_load_sema, 0);
-  list_init (&p->children);
-
-  /* Initialize fd table */
-  for (size_t i = 0; i < OPEN_MAX; i++)
-  {
-    p->fd_table[i].file = NULL;
-    p->fd_table[i].in_use = false;
-    p->fd_table[i].type = FILETYPE_FILE;
-  }
-  p->fd_table[0].in_use = true;
-  p->fd_table[0].type = FILETYPE_STDIN;
-  p->fd_table[1].in_use = true;
-  p->fd_table[1].type = FILETYPE_STDOUT;
-}
-
-void
-file_lock_acquire (void)
-{
-  lock_acquire (&file_lock);
-}
-
-void
-file_lock_release (void)
-{
-  lock_release (&file_lock);
-}
-
-int
-get_available_fd (struct process *p)
-{
-  for (size_t i = 0; i < OPEN_MAX; i++)
-  {
-    if (!p->fd_table[i].in_use)
-      return i;
-  }
-  /* No more available fd in the table */
-  return -1;
-}
-
-bool
-set_fd (struct process *p, int fd, struct file *_file)
-{
-  if (!(0 <= fd && fd < OPEN_MAX)) return false;
-  if (p->fd_table[fd].in_use) return false;
-  p->fd_table[fd].file = _file;
-  p->fd_table[fd].in_use = true;
-  /* Currently there's no way to open STDIN or STDOUT
-     Unless there's dup syscall or something */
-  p->fd_table[fd].type = FILETYPE_FILE;
-  return true;
-}
-
-void
-remove_fd (struct process *p, int fd)
-{
-  if(!(2 <= fd && fd < OPEN_MAX)) return;
-  /* Intended not to check the validity */
-  p->fd_table[fd].in_use = false;
 }

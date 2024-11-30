@@ -17,12 +17,17 @@
 #error TIMER_FREQ <= 1000 recommended
 #endif
 
+/* List of processes in Sleep state */
+static struct list sleep_list;
+
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
+
+static void wake_up_thread (void);
 
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
@@ -37,6 +42,7 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+  list_init(&sleep_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -84,16 +90,35 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
+void 
+push_sleep_list(struct thread* t, int64_t end)
+{
+  enum intr_level old_level;
+
+  old_level = intr_disable();
+  t -> wake_up_time = end;
+  list_push_back(&sleep_list, &t->sleep_elem);
+
+  thread_block();
+  intr_set_level (old_level);
+}
+
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
-
+  int64_t end = timer_ticks () + ticks;
+  struct thread* cur = thread_current();
+  
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+
+  if (is_thread_idle(cur))
+    while (timer_ticks() < end) 
+      thread_yield ();
+
+  else
+    push_sleep_list(cur, end);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -165,6 +190,28 @@ timer_print_stats (void)
 {
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
+
+static void 
+wake_up_thread (void)
+{
+  struct list_elem* it = list_begin(&sleep_list);
+  struct list_elem* end = list_end(&sleep_list);
+
+  int64_t tick = timer_ticks();
+
+  for (; it != end;) {
+    struct thread* t = list_entry(it, struct thread, sleep_elem);
+
+    if (t->wake_up_time <= tick) {
+      it = list_remove(it);
+      thread_unblock(t);
+
+      continue;
+    }
+
+    it = list_next(it);
+  }
+}
 
 /* Timer interrupt handler. */
 static void
@@ -172,6 +219,25 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+
+  if (thread_mlfqs) 
+  {
+    incr_recent_cpu ();
+
+    if (ticks % TIMER_FREQ == 0)
+    {
+      mlfqs_load_avg ();
+      thread_foreach(mlfqs_recent_cpu, NULL);
+    }
+
+    if (ticks % 4 == 0) 
+    {
+      thread_foreach(mlfqs_priority, NULL);
+      sort_ready_list();
+    }
+  }
+
+  wake_up_thread();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

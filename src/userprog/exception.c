@@ -1,10 +1,11 @@
 #include "userprog/exception.h"
 #include <inttypes.h>
 #include <stdio.h>
+#include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include "userprog/syscall.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -109,6 +110,21 @@ kill (struct intr_frame *f)
     }
 }
 
+/* Verify that the pointer is not null,
+   not a kernel vaddr, and exists in a page */
+static bool
+valid_mem_access (const void *up)
+{
+  struct thread *t = thread_current ();
+  if (up == NULL)
+    return false;
+  if (is_kernel_vaddr (up))
+    return false;
+  if (pagedir_get_page (t->pagedir, up) == NULL)
+    return false;
+  return true;
+}
+
 /* Page fault handler.  This is a skeleton that must be filled in
    to implement virtual memory.  Some solutions to project 2 may
    also require modifying this code.
@@ -137,6 +153,15 @@ page_fault (struct intr_frame *f)
      (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
+  if (!user || is_kernel_vaddr(fault_addr)) {
+    thread_current()->exit_status = -1;
+    thread_exit();
+  }
+//   /* If the faulting adress is simply an invalid memory access,
+//      just terminate the thread attempting the access */
+//   if(!valid_mem_access(fault_addr))
+//     thread_exit();
+
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
   intr_enable ();
@@ -148,16 +173,6 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
-
-  /* Kernel caused page fault by accessing user memory */
-  if(!user && check_ptr_in_user_space(fault_addr))
-  {
-   f->eip = (void *)f->eax;
-   f->eax = -1;
-   return;
-  }
-  /* User caused page fault */
-  else sys_exit(-1);
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
