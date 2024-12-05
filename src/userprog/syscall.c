@@ -106,7 +106,7 @@ exec (const char *file)
     if(t->is_load==false) return -1;
     else return tid;
   }
-  return -1;
+  else return -1;
 }
 
 int
@@ -186,7 +186,7 @@ write (int fd, const void *buffer, unsigned size)
   int res;
   struct file* f;
   if (fd>=128 || fd<=0) exit(-1);
-  addr_check;
+  addr_check(buffer);
   lock_acquire(&file_lock);
   if(fd!=1){
     f=get_file(fd);

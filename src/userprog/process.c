@@ -31,7 +31,8 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-  
+  struct list_elem* elem;
+  struct thread* t;
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -40,11 +41,17 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
   char *rest;
   char *program_name = strtok_r(file_name, " ", &rest);
-
+  if(filesys_open(program_name)==NULL) return -1;
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  for(elem=list_begin(&thread_current()->child_thr);elem!=list_end(&thread_current()->child_thr);elem=list_next(elem)){
+    t = list_entry(elem, struct thread, child_thr_elem);
+    if(t->is_load==false){
+      return process_wait(tid);
+    }
+  }
   return tid;
 }
 
@@ -81,10 +88,10 @@ start_process (void *file_name_)
   success = load (argv[0], &if_.eip, &if_.esp);
   if(success) init_stack_arg(argv,argc, &if_.esp);
 
+  sema_up(&(thread_current()->sema_load));
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
-
-  sema_up(&(thread_current()->sema_load));
 
   if (!success) {
     thread_current()->is_load=false;
@@ -126,6 +133,7 @@ process_wait (tid_t child_tid UNUSED)
   sema_down(&(child->sema_exit));
   exit_flag=child->exit_flag;
   list_remove(&(child->child_thr_elem));
+  sema_up(&(child->sema_remove));
   return exit_flag;
   // timer_msleep(2000);
   // return -1;
@@ -137,10 +145,9 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  struct thread* child_thread;
+  struct list_elem* elem;
 
-  //close all open file when process exit
-  file_close(cur->run_file);
-  for (int i=3;i<128;i++) close_file(i);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -158,6 +165,16 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
+    //printf("process exit\n");
+  for(elem=list_begin(&(thread_current()->child_thr)); elem!=list_end(&(thread_current()->child_thr)); elem=list_next(elem)){
+    child_thread=list_entry(elem, struct thread, child_thr_elem);
+    process_wait(child_thread->tid);
+  }
+  //close all open file when process exit
+  file_close(cur->run_file);
+  for(int i=3;i<128;i++) close_file(i);
+  
 }
 
 /*file descriptor functions*/

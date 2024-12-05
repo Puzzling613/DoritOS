@@ -307,6 +307,7 @@ thread_exit (void)
   list_remove (&thread_current()->allelem);
   //sema up parent process
   sema_up(&(thread_current()->sema_exit));
+  sema_down(&(thread_current()->sema_remove));
   thread_current()->status = THREAD_DYING;
   schedule();
   NOT_REACHED();
@@ -588,8 +589,8 @@ thread_schedule_tail (struct thread *prev)
   if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
     {
       ASSERT (prev != cur);
-      //prevent process descriptor delete
-      // palloc_free_page (prev);
+      //prevent process descriptor delete -> 취소
+      palloc_free_page (prev);
     }
 }
 
