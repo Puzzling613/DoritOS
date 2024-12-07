@@ -39,8 +39,10 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+
   char *rest;
   char *program_name = strtok_r(file_name, " ", &rest);
+
   if(filesys_open(program_name)==NULL) return -1;
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
@@ -126,7 +128,7 @@ process_wait (tid_t child_tid UNUSED)
   int exit_flag;
 
   child=get_child(child_tid);
-  //not found
+  //child thread not found
   if(child==NULL) return -1;
 
   //wait until child process exit
@@ -135,8 +137,6 @@ process_wait (tid_t child_tid UNUSED)
   list_remove(&(child->child_thr_elem));
   sema_up(&(child->sema_remove));
   return exit_flag;
-  // timer_msleep(2000);
-  // return -1;
 }
 
 /* Free the current process's resources. */
@@ -180,11 +180,11 @@ process_exit (void)
 /*file descriptor functions*/
 
 int create_file(struct file* f){
-  struct thread* thr=thread_current();
+  struct thread* t=thread_current();
   //add file object tp fd table
   for(int i=3; i<128; i++){
-    if(thr->fd_table[i]==NULL){
-      thr->fd_table[i]=f;
+    if(t->fd_table[i]==NULL){
+      t->fd_table[i]=f;
       //return file descriptor
       return i;
     }
@@ -193,20 +193,20 @@ int create_file(struct file* f){
 }
 
 int get_file(int fd){
-  struct thread* thr=thread_current();
+  struct thread* t=thread_current();
   if(fd>=128 || fd<3) return NULL;
   //file descriptor에 대한 객체의 주소 return
-  return thr->fd_table[fd];
+  return t->fd_table[fd];
 }
 
 void close_file(int fd){
-  struct thread* thr=thread_current();
+  struct thread* t=thread_current();
   if(fd>=128 || fd<3) return;
   //file이 NULL인 경우 제외
-  if (thr->fd_table[fd]!=NULL){
+  if (t->fd_table[fd]!=NULL){
     //fd에 해당하는 file 닫기
-    file_close(thr->fd_table[fd]);
-    thr->fd_table[fd]=NULL;
+    file_close(t->fd_table[fd]);
+    t->fd_table[fd]=NULL;
   }
 }
 
@@ -316,7 +316,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  lock_acquire(&file_lock);
+
   file = filesys_open (file_name);
   if (file == NULL) 
     {
@@ -324,8 +324,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
       goto done; 
     }
   t->run_file = file;
-  file_deny_write(t->run_file); //hourglass
-  lock_release(&file_lock);
+  file_deny_write(file);
+
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -601,7 +601,7 @@ void init_stack_arg(char **argv, int argc, void **esp)
   *esp -= 4;
   *(uint32_t *)*esp = 0;
 
-  // printf("hex dump in construct_stack start\n\n"); 
-  // hex_dump(*esp, *esp, 100, true);
+  printf("hex dump in construct_stack start\n\n"); 
+  hex_dump(*esp, *esp, 100, true);
 
 }

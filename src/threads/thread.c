@@ -305,7 +305,7 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable();
   list_remove (&thread_current()->allelem);
-  //sema up parent process
+  //parent pop from wait list
   sema_up(&(thread_current()->sema_exit));
   sema_down(&(thread_current()->sema_remove));
   thread_current()->status = THREAD_DYING;
@@ -492,12 +492,12 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->real_priority = priority;
+  t->real_priority = priority; //hg
   t->magic = THREAD_MAGIC;
-	t->waiting_lock = NULL;
-  t->nice = 0;
-  t->recent_cpu = 0;
-  list_init(&t->donation_list);
+	t->waiting_lock = NULL; //hg
+  t->nice = 0; //hg
+  t->recent_cpu = 0; //hg
+  list_init(&t->donation_list); //hg
 
 
   old_level = intr_disable ();
@@ -505,15 +505,14 @@ init_thread (struct thread *t, const char *name, int priority)
   intr_set_level (old_level);
 
   #ifdef USERPROG
-    //save parent process
-    t->parent_thr=running_thread();
-    sema_init(&(t->sema_load), 0);
-    sema_init(&(t->sema_exit), 0);
-
     //init child list
     list_init(&(t->child_thr));
     //push to running thread's child list
     list_push_back(&(running_thread()->child_thr), &(t->child_thr_elem));
+    //save parent process
+    t->parent_thr=running_thread();
+    sema_init(&(t->sema_load), 0);
+    sema_init(&(t->sema_exit), 0);
 
     //init fd table
     for(int i=0; i<128; i++) t->fd_table[i]=NULL;

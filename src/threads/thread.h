@@ -105,7 +105,6 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-
     int exit_flag;   //exit 함수의 종료 status
     struct thread* parent_thr;   //parent process descriptor
     struct list child_thr;    //child list

@@ -4,6 +4,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -158,26 +159,24 @@ filesize (int fd)
 int
 read (int fd, void *buffer, unsigned size)
 {
-  int res;
+  int cnt;
   uint8_t tmp;
   if (fd>=128 || fd<0 || fd==1) exit(-1);
   addr_check(buffer);
   lock_acquire(&file_lock);
-  if(fd!=0){
-    struct file* f=get_file(fd);
-    if(f==NULL){
+  if(fd==0){ //표준입력
+    for(cnt=0;(cnt<size) && (tmp=input_getc());cnt++) *(uint8_t*)(buffer+cnt)=tmp;
+  }
+  else{
+    struct file* f = get_file(fd);
+    if(f==NULL) {
       lock_release(&file_lock);
       exit(-1);
     }
-    res=file_read(f, buffer, size);
-  }
-  else{
-    for (res=0;(tmp=input_getc())&&(res<size);res++){
-      *(uint8_t*)(buffer+res)=tmp;
-    }
+    cnt = file_read(f, buffer, size);
   }
   lock_release(&file_lock);
-  return res;
+  return cnt;
 }
 
 int
@@ -188,7 +187,12 @@ write (int fd, const void *buffer, unsigned size)
   if (fd>=128 || fd<=0) exit(-1);
   addr_check(buffer);
   lock_acquire(&file_lock);
-  if(fd!=1){
+  if(fd==1){
+    putbuf(buffer, size);
+    lock_release(&file_lock);
+    return size;
+  }
+  else{
     f=get_file(fd);
     if(f==NULL){
       lock_release(&file_lock);
@@ -197,11 +201,6 @@ write (int fd, const void *buffer, unsigned size)
     res=file_write(f, buffer, size);
     lock_release(&file_lock);
     return res;
-  }
-  else{
-    putbuf(buffer, size);
-    lock_release(&file_lock);
-    return size;
   }
 }
 
@@ -228,7 +227,7 @@ close (int fd)
 }
 
 void addr_check(void* vaddr){ //Reject NULL pointer, pointer to kernel address space, Unmapped virtual memory
-  if (vaddr==NULL || !is_user_vaddr(vaddr) || pagedir_get_page(thread_current()->pagedir, vaddr)==NULL){
+  if (vaddr==NULL || !is_user_vaddr(vaddr) || pagedir_get_page(thread_current()->pagedir, vaddr)!=NULL){
     exit(-1);
   }
 }
