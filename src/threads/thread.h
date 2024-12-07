@@ -115,7 +115,7 @@ struct thread
     struct semaphore sema_exit;     //wait for child process 종료
     struct semaphore sema_remove; //parent의 child list에서 삭제
     //file descriptor table
-    struct file* fd_table[128];
+    struct file* fd_table[130];
 
     struct file * run_file;
 

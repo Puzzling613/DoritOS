@@ -119,14 +119,18 @@ wait (pid_t pid)
 bool
 create (const char *file, unsigned initial_size)
 {
-  if (file==NULL) exit(-1);
+  if (file==NULL) {//printf("create에서 exit함\n");
+  exit(-1);}
   return filesys_create(file, initial_size);
 }
 
 bool
 remove (const char *file)
 {
-  if (file==NULL) exit(-1);
+  if (file==NULL) {
+    //printf("remove에서 exit함\n");
+    exit(-1);
+  }
   return filesys_remove(file);
 }
 
@@ -135,7 +139,10 @@ open (const char *file)
 {
   struct file* f;
   int fd;
-  if (file==NULL) exit(-1);
+  if (file==NULL) {
+    //printf("open에서 exit함\n");
+    exit(-1);
+  }
   
   lock_acquire(&file_lock);
   f=filesys_open(file);
@@ -152,7 +159,9 @@ int
 filesize (int fd) 
 {
   struct file* f=get_file(fd);
-  if(f==NULL) exit(-1);
+  if(f==NULL) {//printf("filesize에서 exit함\n");
+  exit(-1);
+  }
   return file_length(f);
 }
 
@@ -161,7 +170,10 @@ read (int fd, void *buffer, unsigned size)
 {
   int cnt;
   uint8_t tmp;
-  if (fd>=128 || fd<0 || fd==1) exit(-1);
+  if (fd>=130 || fd<0 || fd==1) {
+    //printf("read fd예외에서 exit함\n");
+    exit(-1);
+  }
   addr_check(buffer);
   lock_acquire(&file_lock);
   if(fd==0){ //표준입력
@@ -171,6 +183,7 @@ read (int fd, void *buffer, unsigned size)
     struct file* f = get_file(fd);
     if(f==NULL) {
       lock_release(&file_lock);
+      //printf("f가 null이라 read에서 exit함\n");
       exit(-1);
     }
     cnt = file_read(f, buffer, size);
@@ -184,7 +197,9 @@ write (int fd, const void *buffer, unsigned size)
 {
   int res;
   struct file* f;
-  if (fd>=128 || fd<=0) exit(-1);
+  if (fd<=0 || fd>=130 ) { //printf("write예외에서 exit함\n");
+  exit(-1);
+  }
   addr_check(buffer);
   lock_acquire(&file_lock);
   if(fd==1){
@@ -196,6 +211,7 @@ write (int fd, const void *buffer, unsigned size)
     f=get_file(fd);
     if(f==NULL){
       lock_release(&file_lock);
+      //printf("write에서 exit함\n");
       exit(-1);
     }
     res=file_write(f, buffer, size);
@@ -208,7 +224,10 @@ void
 seek (int fd, unsigned position) 
 {
   struct file* f=get_file(fd);
-  if(f==NULL) exit(-1);
+  if(f==NULL) {
+    //printf("seek에서 exit함\n");
+    exit(-1);
+  }
   file_seek(f, position);
 }
 
@@ -216,7 +235,10 @@ unsigned
 tell (int fd) 
 {
   struct file* f=get_file(fd);
-  if(f==NULL) exit(-1);
+  if(f==NULL) {
+    //printf("tell에서 exit함\n");
+    exit(-1);
+  }
   return file_tell(f);
 }
 
@@ -228,6 +250,7 @@ close (int fd)
 
 void addr_check(void* vaddr){ //Reject NULL pointer, pointer to kernel address space, Unmapped virtual memory
   if (vaddr==NULL || !is_user_vaddr(vaddr) || pagedir_get_page(thread_current()->pagedir, vaddr)!=NULL){
+    //printf("addr_check에서 exit함\n");
     exit(-1);
   }
 }

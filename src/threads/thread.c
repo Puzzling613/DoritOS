@@ -515,7 +515,7 @@ init_thread (struct thread *t, const char *name, int priority)
     sema_init(&(t->sema_exit), 0);
 
     //init fd table
-    for(int i=0; i<128; i++) t->fd_table[i]=NULL;
+    for(int i=0; i<130; i++) t->fd_table[i]=NULL;
   #endif
 }
 

@@ -42,7 +42,7 @@ process_execute (const char *file_name)
 
   char *rest;
   char *program_name = strtok_r(file_name, " ", &rest);
-
+  //printf("한국어: %s\n",program_name);
   if(filesys_open(program_name)==NULL) return -1;
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
@@ -72,23 +72,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
-  int argc = 0;
-  char *argv[64]; //128byte limit라 띄어쓰기 빼고 64개 limit 지정
-
-  int len = strlen(file_name) + 1;
-  char * _file_name = (char *)malloc(len);
-  strlcpy(_file_name, file_name, len);
-  char * token;
-
-  //문자열을 파싱해 argv에 저장
-  while ((token = strtok_r(_file_name, " ", &_file_name)) != NULL) {
-      argv[argc++] = token;
-  }
-  // for (int i = 0; i < argc; i++) {
-  //       printf("argv[%d]: %s\n", i, argv[i]);
-  // }
-  success = load (argv[0], &if_.eip, &if_.esp);
-  if(success) init_stack_arg(argv,argc, &if_.esp);
+  success = load (file_name, &if_.eip, &if_.esp);
 
   sema_up(&(thread_current()->sema_load));
 
@@ -97,6 +81,7 @@ start_process (void *file_name_)
 
   if (!success) {
     thread_current()->is_load=false;
+    printf("success 실패해서 start_process에서 exit함\n");
     exit(-1);
   }
   thread_current()->is_load=true;
@@ -173,7 +158,7 @@ process_exit (void)
   }
   //close all open file when process exit
   file_close(cur->run_file);
-  for(int i=3;i<128;i++) close_file(i);
+  for(int i=3;i<130;i++){ close_file(i);}
   
 }
 
@@ -182,7 +167,7 @@ process_exit (void)
 int create_file(struct file* f){
   struct thread* t=thread_current();
   //add file object tp fd table
-  for(int i=3; i<128; i++){
+  for(int i=3; i<130; i++){
     if(t->fd_table[i]==NULL){
       t->fd_table[i]=f;
       //return file descriptor
@@ -194,14 +179,14 @@ int create_file(struct file* f){
 
 int get_file(int fd){
   struct thread* t=thread_current();
-  if(fd>=128 || fd<3) return NULL;
+  if(fd>=130 || fd<3) return NULL;
   //file descriptor에 대한 객체의 주소 return
   return t->fd_table[fd];
 }
 
 void close_file(int fd){
   struct thread* t=thread_current();
-  if(fd>=128 || fd<3) return;
+  if(fd>=130 || fd<3) return;
   //file이 NULL인 경우 제외
   if (t->fd_table[fd]!=NULL){
     //fd에 해당하는 file 닫기
@@ -314,18 +299,33 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
+  /*argument passing*/
+  int argc = 0;
+  char *argv[64]; //128byte limit라 띄어쓰기 빼고 64개 limit 지정
 
+  int len = strlen(file_name) + 1;
+  char * _file_name = (char *)malloc(len);
+  strlcpy(_file_name, file_name, len);
+  char * token;
+
+  //문자열을 파싱해 argv에 저장
+  while ((token = strtok_r(_file_name, " ", &_file_name)) != NULL) {
+      argv[argc++] = token;
+  }
+  // for (int i = 0; i < argc; i++) {
+  //       printf("한국어argv[%d]: %s\n", i, argv[i]);
+  // }
   /* Open executable file. */
-
-  file = filesys_open (file_name);
+  lock_acquire(&file_lock);
+  file = filesys_open (argv[0]); //원래 argv[0] 대신 file_name
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", argv[0]);
       goto done; 
     }
   t->run_file = file;
   file_deny_write(file);
-
+  lock_release(&file_lock);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -401,7 +401,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Set up stack. */
   if (!setup_stack (esp))
     goto done;
-
+  init_stack_arg(argv, argc, esp);
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
@@ -601,7 +601,7 @@ void init_stack_arg(char **argv, int argc, void **esp)
   *esp -= 4;
   *(uint32_t *)*esp = 0;
 
-  printf("hex dump in construct_stack start\n\n"); 
-  hex_dump(*esp, *esp, 100, true);
+  //printf("hex dump in construct_stack start\n\n"); 
+  //hex_dump(*esp, *esp, 100, true);
 
 }
