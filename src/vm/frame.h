@@ -8,7 +8,7 @@ struct frame_table{
 };
 
 void init_frame(void);
-void get_page (void *user_page);
+void *get_page (void *user_page);
 void free_page (void *kernel_addr);
 void free_frame (void *user_page, bool isLoad);
 void evict_frame(void);

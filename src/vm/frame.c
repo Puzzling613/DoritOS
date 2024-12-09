@@ -19,37 +19,40 @@ void init_frame(void){
 }
 
 //page allocator func 호출, **User Pool**
-void *get_page (void *user_page){
+void *get_page(void *user_page) {
     void *kernel_page = palloc_get_page(PAL_USER);
     cnt++;
 
-    //frame table에 user page 정보 입력
-    struct frame *fr = (struct frame*)malloc(sizeof(struct frame));
+    struct frame *fr = (struct frame *)malloc(sizeof(struct frame));
+    if (!fr) {
+        return NULL; // malloc 실패
+    }
     fr->page_addr = user_page;
     fr->whose_frame = thread_current();
-
-    //no page available
-    while (!kernel_page){
-        if (!lock_held_by_current_thread(&frame_lock)){
+    while (!kernel_page) {
+        if (!lock_held_by_current_thread(&frame_lock)) {
             lock_acquire(&frame_lock);
         }
         kernel_page = evict_page();
-        if(lock_held_by_current_thread(&frame_lock)){
+        if (lock_held_by_current_thread(&frame_lock)) {
             lock_release(&frame_lock);
         }
-
-        fr->virtual_addr = kernel_page;
-
-        if (!lock_held_by_current_thread(&frame_lock)){
-            lock_acquire(&frame_lock);
+        if (kernel_page) {
+            fr->virtual_addr = kernel_page;
+            if (!lock_held_by_current_thread(&frame_lock)) {
+                lock_acquire(&frame_lock);
+            }
+            list_push_back(&f, &fr->frame_e);
+            if (lock_held_by_current_thread(&frame_lock)) {
+                lock_release(&frame_lock);
+            }
+            break;
         }
-        list_push_back(&f, &fr->frame_e);
-        if(lock_held_by_current_thread(&frame_lock)){
-            lock_release(&frame_lock);
-        }
-        return kernel_page;
     }
+    free(fr);
+    return kernel_page;
 }
+
 
 void free_page (void *kernel_addr){
     if(!lock_held_by_current_thread(&frame_lock)){

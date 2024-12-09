@@ -120,6 +120,8 @@ struct thread
     struct bit_vector fd_map;
     int exit_status;
 
+    struct file *file;
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     
