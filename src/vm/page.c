@@ -9,7 +9,7 @@
 unsigned
 page_hash (const struct hash_elem *p_, void *aux UNUSED)
 {
-    const struct spt *p = hash_entry (p_, struct spt, spt_hash_elem);
+    const struct SPT *p = hash_entry (p_, struct SPT, spt_hash_elem);
     return hash_bytes (&p->user_vaddr, sizeof p->user_vaddr);
 }
 
@@ -18,20 +18,20 @@ bool
 page_less (const struct hash_elem *a_, const struct hash_elem *b_,
 void *aux UNUSED)
 {
-    const struct spt *a = hash_entry (a_, struct spt, spt_hash_elem);
-    const struct spt *b = hash_entry (b_, struct spt, spt_hash_elem);
+    const struct SPT *a = hash_entry (a_, struct SPT, spt_hash_elem);
+    const struct SPT *b = hash_entry (b_, struct SPT, spt_hash_elem);
     return a->user_vaddr < b->user_vaddr;
 }
 
 bool 
-page_insert(struct hash *h, struct spt *p) 
+page_insert(struct hash *h, struct SPT *p) 
 {
     if(!hash_insert(h, &p->spt_hash_elem)) return true;
 	else return false;
 }
 
 bool 
-page_delete(struct hash *h, struct spt *p) 
+page_delete(struct hash *h, struct SPT *p) 
 {
 	if(!hash_delete(h, &p->spt_hash_elem)) return true;
 	else return false;
@@ -43,10 +43,10 @@ spt_init(struct hash * spt)
     hash_init(spt, page_hash, page_less, NULL);
 }
 
-struct spt * 
-spt_find(struct spt * spt, void * va)
+struct SPT * 
+spt_find(struct SPT * spt, void * va)
 {
-    struct spt spt;
+    struct SPT spt;
     struct thread *t = thread_current();
     struct hash_elem *e;
 
@@ -59,13 +59,20 @@ spt_find(struct spt * spt, void * va)
 }
 
 bool 
-spt_insert(struct spt * spt, struct spt *page) 
+spt_insert(struct SPT * spt, struct SPT *page) 
 {
     /*새 spt 구조체를 할당한다. member 정보와 file 정보를 저장한다. 생성된 spt entry를 spt 내 hash table에 삽입한다.*/
-    struct spt * spt = (struct spt *)malloc(sizeof(struct spt));
+    struct SPT * spt = (struct SPT *)malloc(sizeof(struct SPT));
 
     spt->user_vaddr = page->user_vaddr;
-    //...
+    spt->page_location = page->page_location;
+    spt->writable = page->writable;
+    spt->file = page->file;
+    spt->frame = page->frame;
+    spt->offset = page->offset;
+    spt->read_bytes = page->read_bytes;
+    spt->is_loaded = page->is_loaded;
+    spt->spt_hash_elem = page->spt_hash_elem;
 
     return page_insert(&thread_current()->pagetable, spt);
 }

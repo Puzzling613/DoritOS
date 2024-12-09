@@ -5,7 +5,7 @@
 #include "filesys/file.h"
 #include "filesys/off_t.h"
 
-struct spt //page
+struct SPT //page
 {
 	void *user_vaddr;
     int page_location; // (file: 0/memory: 1/swap table:2)
@@ -14,18 +14,19 @@ struct spt //page
     struct frame *frame;
     off_t offset;
     size_t read_bytes;
+    bool is_loaded = false;
     struct hash_elem spt_hash_elem;
 };
 
 void spt_init(struct hash * spt);
-struct spt * spt_find(struct spt * spt, void * va);
-bool spt_insert(struct spt * spt, struct spt *page);
-bool spt_delete(struct spt * spt, void *va);
-void spt_free(struct spt * spt);
+struct SPT * spt_find(struct SPT * spt, void * va);
+bool spt_insert(struct SPT * spt, struct SPT *page);
+bool spt_delete(struct SPT * spt, void *va);
+void spt_free(struct SPT * spt);
 
 unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED);
 bool page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
-bool page_insert(struct hash *h, struct spt *p);
-bool page_delete(struct hash *h, struct spt *p);
+bool page_insert(struct hash *h, struct SPT *p);
+bool page_delete(struct hash *h, struct SPT *p);
 
 #endif

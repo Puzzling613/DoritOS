@@ -604,7 +604,7 @@ setup_stack (void **esp)
 
   if (kpage != NULL) 
     {
-      success = install_page (user_page, kpage,);
+      success = install_page (user_page, kpage);
       if (success){
         *esp = PHYS_BASE;
         spt->is_loaded = true;
