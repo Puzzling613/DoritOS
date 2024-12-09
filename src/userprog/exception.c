@@ -174,6 +174,16 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+  bool load = false;
+  if(not_present)
+  {
+		struct spt *spt = spt_find(fault_addr);
+
+		if(spt != NULL) load = page_load(spt);
+		//else if(stack_access(f->esp,fault_addr)) load = stack_growth(fault_addr);
+		
+  if(!load) sys_exit(-1);
+  }
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
