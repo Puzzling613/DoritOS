@@ -20,6 +20,7 @@ bool spt_insert(struct spt * spt, struct spt *page);
 bool spt_delete(struct spt * spt);
 void spt_free(struct spt * spt);
 
+/*Hash Helper Functions*/
 /* Returns a hash value for page p. */
 unsigned
 page_hash (const struct hash_elem *p_, void *aux UNUSED)
