@@ -14,7 +14,7 @@ struct spt //page
     struct hash_elem spt_hash_elem
 };
 
-void spt_init(struct spt * spt);
+void spt_init(struct hash * spt);
 struct spt * spt_find(struct spt * spt, void * va);
 bool spt_insert(struct spt * spt, struct spt *page);
 bool spt_delete(struct spt * spt);
