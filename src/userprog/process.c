@@ -588,32 +588,33 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp) 
 {
-  struct SPT *spt = (struct SPT*)malloc(sizeof(struct SPT));
   uint8_t *kpage;
   bool success = false;
   uint8_t *user_page = ((uint8_t *) PHYS_BASE) - PGSIZE;
-
+  struct SPT *spt = (struct SPT*)malloc(sizeof(struct SPT));
   spt->page_location = pg_round_down(user_page);
   spt->writable = true;
+
   // kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+
   kpage = get_page(user_page);
   if (kpage == NULL){
     free(spt);
     return success;
   }
 
-  if (kpage != NULL) 
+  if (kpage != NULL)
     {
-      success = install_page (user_page, kpage);
+      success = install_page (user_page, kpage, true);
       if (success){
         *esp = PHYS_BASE;
         spt->is_loaded = true;
       }
       else{
+        // palloc_free_page (kpage);
         free_page(kpage);
         free(spt);
       }
-        // palloc_free_page (kpage);
     }
   return success;
 }

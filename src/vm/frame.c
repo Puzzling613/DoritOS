@@ -19,7 +19,7 @@ void init_frame(void){
 }
 
 //page allocator func 호출, **User Pool**
-void get_page (void *user_page){
+void *get_page (void *user_page){
     void *kernel_page = palloc_get_page(PAL_USER);
     cnt++;
 
