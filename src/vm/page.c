@@ -59,20 +59,18 @@ spt_find(struct SPT * spt, void * va)
 }
 
 bool 
-spt_insert(struct SPT * spt, struct SPT *page) 
+spt_insert(struct SPT *page, struct file *f, off_t offset, size_t read_bytes, bool writable) 
 {
     /*새 spt 구조체를 할당한다. member 정보와 file 정보를 저장한다. 생성된 spt entry를 spt 내 hash table에 삽입한다.*/
     struct SPT * spt = (struct SPT *)malloc(sizeof(struct SPT));
 
     spt->user_vaddr = page->user_vaddr;
     spt->page_location = page->page_location;
-    spt->writable = page->writable;
-    spt->file = page->file;
-    spt->frame = page->frame;
-    spt->offset = page->offset;
-    spt->read_bytes = page->read_bytes;
-    spt->is_loaded = page->is_loaded;
-    spt->spt_hash_elem = page->spt_hash_elem;
+    spt->writable = writable;
+    spt->file = f;
+    spt->offset = offset;
+    spt->read_bytes = read_bytes;
+    spt->is_loaded = false;
 
     return page_insert(&thread_current()->pagetable, spt);
 }

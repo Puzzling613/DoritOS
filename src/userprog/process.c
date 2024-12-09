@@ -552,7 +552,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      set_spt(upage, thread_current()->file, ofs, page_read_bytes, writable);
+      spt_insert(upage, thread_current()->file, ofs, page_read_bytes, writable);
 
       // /* Get a page of memory. */
       // uint8_t *kpage = palloc_get_page (PAL_USER);
