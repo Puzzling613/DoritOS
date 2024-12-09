@@ -1,9 +1,11 @@
 #include <hash.h>
 #include "filesys/off_t.h"
+#include "filesys/file.h"
+
 
 struct spt //page
 {
-	const void *user_vaddr,
+	void *user_vaddr,
     int page_location, // (file: 0/memory: 1/swap table:2)
     bool writable, 
     struct file *file,

@@ -7,7 +7,7 @@
 #include "threads/synch.h"
 #include "threads/fixed-point.h"
 #include "userprog/bit_vector.h"
-#include "vm/spt.h"
+#include "vm/page.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -127,7 +127,7 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct spt spt
+    struct hash pagetable;
 #endif
 
    int64_t wake_up_time;

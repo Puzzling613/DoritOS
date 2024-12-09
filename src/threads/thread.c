@@ -385,8 +385,6 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  init_spt (&t->spt); //spt
-  
   /* Add to run queue. */
   thread_unblock (t);
 
