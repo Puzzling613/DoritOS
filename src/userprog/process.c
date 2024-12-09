@@ -141,7 +141,7 @@ start_process (void *file_name_)
   bool success;
 
   /*Initialize spt*/
-  init_spt (&cur->pagetable); //spt
+  spt_init (&thread_current()->pagetable); //spt
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);

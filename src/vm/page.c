@@ -1,5 +1,41 @@
-#include "page.h"
+#include "vm/page.h"
+#include "threads/thread.h"
+#include "vm/frame.h"
+#include <string.h>
 #include "threads/vaddr.h"
+
+/*Hash Helper Functions*/
+/* Returns a hash value for page p. */
+unsigned
+page_hash (const struct hash_elem *p_, void *aux UNUSED)
+{
+    const struct spt *p = hash_entry (p_, struct spt, spt_hash_elem);
+    return hash_bytes (&p->user_vaddr, sizeof p->user_vaddr);
+}
+
+/* Returns true if page a precedes page b. */
+bool
+page_less (const struct hash_elem *a_, const struct hash_elem *b_,
+void *aux UNUSED)
+{
+    const struct spt *a = hash_entry (a_, struct spt, spt_hash_elem);
+    const struct spt *b = hash_entry (b_, struct spt, spt_hash_elem);
+    return a->user_vaddr < b->user_vaddr;
+}
+
+bool 
+page_insert(struct hash *h, struct spt *p) 
+{
+    if(!hash_insert(h, &p->spt_hash_elem)) return true;
+	else return false;
+}
+
+bool 
+page_delete(struct hash *h, struct spt *p) 
+{
+	if(!hash_delete(h, &p->spt_hash_elem)) return true;
+	else return false;
+}
 
 void
 spt_init(struct hash * spt)
@@ -33,6 +69,7 @@ spt_insert(struct spt * spt, struct spt *page)
 
     return page_insert(&thread_current()->pagetable, spt);
 }
+
 bool 
 spt_delete(struct spt * spt, void *va)
 {
@@ -44,6 +81,7 @@ spt_delete(struct spt * spt, void *va)
     }
     return false;
 }
+
 void
 spt_free(struct spt * spt) 
 {
